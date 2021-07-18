@@ -1,0 +1,3 @@
+STEP_SIZE PIVOT_VALUE TARGET CHANGE_PER_STEP STAT_LOWER_LIMIT STAT_UPPER_LIMIT STAT PARAMETER_TO_SCALE 
+4         10          1      1               1                25               INT  DICE_SIZE
+6         10          1      1               1                25               WIS  DICE_NUMBER

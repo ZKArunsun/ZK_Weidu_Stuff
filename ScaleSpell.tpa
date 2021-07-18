@@ -640,9 +640,9 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
     DELETE ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~
     
 
-    OUTER_FOR(i=1; i<number_of_effects_to_create;++i) BEGIN
-        OUTER_SET size = SIZE_OF_FILE ~override/%SPELL_TO_PATCH%.SPL~ 
+   
         COPY_EXISTING ~%SPELL_TO_PATCH%.SPL~ ~override/%SPELL_TO_PATCH%.SPL~
+            FOR(i=1; i<number_of_effects_to_create;++i) BEGIN
             PATCH_IF($effects_to_create("%i%_header") != 0) BEGIN
                 LPF ADD_SPELL_EFFECT
                     INT_VAR

@@ -141,7 +141,6 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL INT_VAR STEP_SIZE = 1 PIVOT_VALUE = 10 TARGET
         * LAF SCALE_SPELL INT_VAR STEP_SIZE = 4 PIVOT_VALUE = 10 TARGET = 1  CHANGE_PER_STEP = 1 STAT_LOWER_LIMIT = 1 STAT_UPPER_LIMIT = 25 STR_VAR STAT = ~INT~ ORIGINAL_RESOURCE = ~SPWI112~ NEW_RESOURCE_BASE = ~ZKWI112~ PARAMETER_TO_SCALE = ~DIE_SIZE~ DESCRIPTION = ~+ The Dice Size is increased (decreased) by 1 for every 4th point of intelligence above (below) 10.~END
         * This will increase (decrease) the dice size of Magic Missile by 1 for every 4th point of intelligence of the caster above (below) 10. The newly created spells will be named ZKWI112A through ZKWI112G.
     */
-
     //Sanity check on PARAMETER_TO_SCALE
     ACTION_IF !(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DURATION~ OR ~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_SIZE~ OR ~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_NUMBER~ OR ~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~SAVING_THROW~ OR ~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~AMOUNT~)
     BEGIN
@@ -172,8 +171,12 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL INT_VAR STEP_SIZE = 1 PIVOT_VALUE = 10 TARGET
         INNER_ACTION BEGIN
         OUTER_SPRINT current_char $extra_char("%j%")
         OUTER_SPRINT spell_name "%NEW_RESOURCE_BASE%"^"%current_char%"
-        PRINT "%spell_name%"
+        //PRINT "%spell_name%"
         COPY_EXISTING ~%ORIGINAL_RESOURCE%.SPL~  ~override/%spell_name%.SPL~
+            SAY 0x8 #-1
+            SAY 0xc #-1
+            SAY 0x54 #-1
+            SAY 0x50 #-1
             SET change_value = 0 - (LOWER_STEPS - j +1) * CHANGE_PER_STEP
             /*
             Ability Length: 0x28
@@ -449,6 +452,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
         READ_LONG 0x6a effect_offset
         READ_SHORT 0x90 ability_number_of_effects
         READ_SHORT 0x92 effect_number_offset
+        READ_SHORT 0x98 projectile
         SET ability_effect_offset = effect_offset + effect_number_offset*0x30
 
         PATCH_IF (DESCRIPTION STRING_MATCHES_REGEXP "^\+.*") BEGIN 
@@ -499,6 +503,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                 COUNT_2DA_ROWS 5 effect_scaling_number
                 effect_scaling_number -=1
                 FOR(i = 1; i < effect_scaling_number+1; ++i) BEGIN
+                    
                     READ_2DA_ENTRY i 0 5 $effect_scale("%i%_min_level")
                     READ_2DA_ENTRY i 1 5 $effect_scale("%i%_max_level")
                     READ_2DA_ENTRY i 2 5 $effect_scale("%i%_step_size")
@@ -514,16 +519,16 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                 OUTER_SET previous_file = j = SCALING_START_LEVEL?1:j - 1
 
                 COPY  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.%previous_file%.2da~  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.%j%.2da~
-                    PATCH_PRINT ~Number of effects in ability: %ability_number_of_effects%~
+                    //PATCH_PRINT ~Number of effects in ability: %ability_number_of_effects%~
                     FOR(k = 1; k<=ability_number_of_effects; ++k) BEGIN
                         SET header = j + 1 - SCALING_START_LEVEL
-                        PATCH_PRINT ~Setting effect %k% to header %header%~
+                        //PATCH_PRINT ~Setting effect %k% to header %header%~
                         SET_2DA_ENTRY k 0 0 header
                         FOR(l = 1; l<effect_scaling_number+1; ++l) BEGIN
                             PATCH_IF(k = $effect_scale("%l%_effect_number") AND j>=$effect_scale("%l%_min_level") AND j<=$effect_scale("%l%_max_level")) BEGIN
                                 READ_2DA_ENTRY k 5 5 local_timing_mode
                                 SET change_value = (j - $effect_scale("%l%_min_level")) MODULO $effect_scale("%l%_step_size") = 0? $effect_scale("%l%_change_per_step"):0
-                                PATCH_PRINT "change_value: %change_value%"
+                                //PATCH_PRINT "change_value: %change_value%"
                                 PATCH_IF($effect_scale("%l%_parameter_to_scale") STRING_EQUAL ~DURATION~ AND local_timing_mode = 0) BEGIN
                                     READ_2DA_ENTRY k 8 8 local_duration
                                     PATCH_IF(local_duration>6) BEGIN
@@ -626,7 +631,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
             range = range
             minimum_level = i
             casting_speed = casting_speed
-            projectile = 1      
+            projectile = projectile      
             STR_VAR 
             icon = EVAL ~%icon%~
             END
@@ -654,7 +659,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                 READ_2DA_ENTRY i 16 0 $effects_to_create("%i%_special")
             END
         END
-    DELETE ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~
+    //DELETE ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~
     
 
    

@@ -164,7 +164,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL INT_VAR STEP_SIZE = 1 PIVOT_VALUE = 10 TARGET
         READ_2DA_ENTRY k - 1 0 1 extra_char
         SPRINT $extra_char("%k%")  "%extra_char%"
     END
-
+    BUT_ONLY
 
     COPY_EXISTING ~%ORIGINAL_RESOURCE%.SPL~ override
     FOR (j = 1; j < NUMBER_OF_STEPS+1; ++j) BEGIN
@@ -382,39 +382,40 @@ DEFINE_ACTION_FUNCTION MULTI_SCALE_SPELL INT_VAR i = 1 STR_VAR TABLE_PATH = ~~  
     */
     ACTION_IF (~%TABLE_PATH%~ STRING_MATCHES_REGEXP ~.*\.2da~) BEGIN FAIL ~TABLE_PATH must be a path to a 2da file~ END
     COPY "%TABLE_PATH%" "%TABLE_PATH%"
-    COUNT_2DA_ROWS 7 row_count
-    PATCH_IF (STRING_LENGTH ~%NEW_RESOURCE_BASE%~ + row_count - i> 8) BEGIN
-        SET scaling_dimension = row_count - 1
-        SET new_resource_length = STRING_LENGTH ~%NEW_RESOURCE_BASE%~
-        SET max_dimension = 8 - new_resource_length
-        PATCH_FAIL ~Maximum scaling dimension exceeded. For a NEW_RESOURCE_BASE '%NEW_RESOURCE_BASE%' with length %new_resource_length%, the maximum scaling dimension is %max_dimension%. Please reduce the length of NEW_RESOURCE_BASE length or the scaling dimension (number of scaling rows in %TABLE_PATH%. Current: %scaling_dimension%).~
-    END    
-    READ_2DA_ENTRY i 0 7 step_size
-    READ_2DA_ENTRY i 1 7 pivot_value
-    READ_2DA_ENTRY i 2 7 target 
-    READ_2DA_ENTRY i 3 7 change_per_step
-    READ_2DA_ENTRY i 4 7 stat_lower_limit
-    READ_2DA_ENTRY i 5 7 stat_upper_limit
-    READ_2DA_ENTRY i 6 7 stat
-    READ_2DA_ENTRY i 7 7 parameter_to_scale
-    INNER_ACTION BEGIN
-        OUTER_SET UPPER_STEPS =  (stat_upper_limit - pivot_value - step_size + 1) MODULO step_size = 0?(stat_upper_limit - pivot_value - step_size + 1)/step_size:1 + (stat_upper_limit - pivot_value - step_size + 1)/step_size
-        OUTER_SET LOWER_STEPS =  (pivot_value - stat_lower_limit - step_size + 1) MODULO step_size = 0?(pivot_value - stat_lower_limit - step_size + 1)/step_size:1 + (pivot_value - stat_lower_limit - step_size + 1)/step_size
-        OUTER_SET NUMBER_OF_STEPS = UPPER_STEPS + LOWER_STEPS +1
-        LAF SCALE_SPELL INT_VAR STEP_SIZE = step_size PIVOT_VALUE = pivot_value TARGET = target  CHANGE_PER_STEP = change_per_step STAT_LOWER_LIMIT = stat_lower_limit STAT_UPPER_LIMIT = stat_upper_limit STR_VAR STAT = EVAL ~%stat%~ ORIGINAL_RESOURCE = EVAL ~%ORIGINAL_RESOURCE%~ NEW_RESOURCE_BASE = EVAL ~%NEW_RESOURCE_BASE%~ PARAMETER_TO_SCALE = EVAL "%parameter_to_scale%" DESCRIPTION = EVAL ~%DESCRIPTION%~ END
-        ACTION_IF(i < row_count - 1) BEGIN
-        COPY ~%MOD_FOLDER%/2da/chars.2da~  ~%MOD_FOLDER%/2da/chars.2da~
-            FOR(k = 1;k<41;++k) BEGIN
-            READ_2DA_ENTRY k - 1 0 1 extra_char
-            SPRINT $extra_char("%k%")  "%extra_char%"
+        COUNT_2DA_ROWS 7 row_count
+        PATCH_IF (STRING_LENGTH ~%NEW_RESOURCE_BASE%~ + row_count - i> 8) BEGIN
+            SET scaling_dimension = row_count - 1
+            SET new_resource_length = STRING_LENGTH ~%NEW_RESOURCE_BASE%~
+            SET max_dimension = 8 - new_resource_length
+            PATCH_FAIL ~Maximum scaling dimension exceeded. For a NEW_RESOURCE_BASE '%NEW_RESOURCE_BASE%' with length %new_resource_length%, the maximum scaling dimension is %max_dimension%. Please reduce the length of NEW_RESOURCE_BASE length or the scaling dimension (number of scaling rows in %TABLE_PATH%. Current: %scaling_dimension%).~
+        END    
+        READ_2DA_ENTRY i 0 7 step_size
+        READ_2DA_ENTRY i 1 7 pivot_value
+        READ_2DA_ENTRY i 2 7 target 
+        READ_2DA_ENTRY i 3 7 change_per_step
+        READ_2DA_ENTRY i 4 7 stat_lower_limit
+        READ_2DA_ENTRY i 5 7 stat_upper_limit
+        READ_2DA_ENTRY i 6 7 stat
+        READ_2DA_ENTRY i 7 7 parameter_to_scale
+        INNER_ACTION BEGIN
+            OUTER_SET UPPER_STEPS =  (stat_upper_limit - pivot_value - step_size + 1) MODULO step_size = 0?(stat_upper_limit - pivot_value - step_size + 1)/step_size:1 + (stat_upper_limit - pivot_value - step_size + 1)/step_size
+            OUTER_SET LOWER_STEPS =  (pivot_value - stat_lower_limit - step_size + 1) MODULO step_size = 0?(pivot_value - stat_lower_limit - step_size + 1)/step_size:1 + (pivot_value - stat_lower_limit - step_size + 1)/step_size
+            OUTER_SET NUMBER_OF_STEPS = UPPER_STEPS + LOWER_STEPS +1
+            LAF SCALE_SPELL INT_VAR STEP_SIZE = step_size PIVOT_VALUE = pivot_value TARGET = target  CHANGE_PER_STEP = change_per_step STAT_LOWER_LIMIT = stat_lower_limit STAT_UPPER_LIMIT = stat_upper_limit STR_VAR STAT = EVAL ~%stat%~ ORIGINAL_RESOURCE = EVAL ~%ORIGINAL_RESOURCE%~ NEW_RESOURCE_BASE = EVAL ~%NEW_RESOURCE_BASE%~ PARAMETER_TO_SCALE = EVAL "%parameter_to_scale%" DESCRIPTION = EVAL ~%DESCRIPTION%~ END
+            ACTION_IF(i < row_count - 1) BEGIN
+            COPY ~%MOD_FOLDER%/2da/chars.2da~  ~%MOD_FOLDER%/2da/chars.2da~
+                FOR(k = 1;k<41;++k) BEGIN
+                READ_2DA_ENTRY k - 1 0 1 extra_char
+                SPRINT $extra_char("%k%")  "%extra_char%"
+                END
+            OUTER_FOR (j = 1; j < NUMBER_OF_STEPS + 1; ++j) BEGIN
+                OUTER_SPRINT current_char $extra_char("%j%")
+                OUTER_SPRINT spell_name "%NEW_RESOURCE_BASE%"^"%current_char%"
+            LAF MULTI_SCALE_SPELL INT_VAR i = i + 1 STR_VAR TABLE_PATH = EVAL "%TABLE_PATH%"   ORIGINAL_RESOURCE = EVAL ~%spell_name%~ NEW_RESOURCE_BASE = EVAL ~%spell_name%~ DESCRIPTION = ~%DESCRIPTION%~ END
             END
-        OUTER_FOR (j = 1; j < NUMBER_OF_STEPS + 1; ++j) BEGIN
-            OUTER_SPRINT current_char $extra_char("%j%")
-            OUTER_SPRINT spell_name "%NEW_RESOURCE_BASE%"^"%current_char%"
-        LAF MULTI_SCALE_SPELL INT_VAR i = i + 1 STR_VAR TABLE_PATH = EVAL "%TABLE_PATH%"   ORIGINAL_RESOURCE = EVAL ~%spell_name%~ NEW_RESOURCE_BASE = EVAL ~%spell_name%~ DESCRIPTION = ~%DESCRIPTION%~ END
+            END
         END
-        END
-    END
+        BUT_ONLY
 END
 
 DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MAX_LEVEL = 20 STR_VAR TABLE_PATH = ~~ SPELL_TO_PATCH = ~~ DESCRIPTION = ~+~ BEGIN
@@ -511,7 +512,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                     READ_2DA_ENTRY i 4 5 $effect_scale("%i%_parameter_to_scale")
                     READ_2DA_ENTRY i 5 5 $effect_scale("%i%_effect_number")
                 END
-
+            BUT_ONLY
 
             
                 
@@ -658,7 +659,8 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                 READ_2DA_ENTRY i 16 0 $effects_to_create("%i%_special")
             END
         END
-    //DELETE ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~
+    BUT_ONLY
+    DELETE ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~
     
 
    

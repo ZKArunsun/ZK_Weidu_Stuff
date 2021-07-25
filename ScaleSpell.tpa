@@ -16,8 +16,8 @@ DEFINE_ACTION_FUNCTION ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = ~
         COUNT_2DA_ROWS 2 rows
         FOR (i = 0; i < rows; ++i) BEGIN
         READ_2DA_ENTRY i 1 2 state_label
-        PATCH_IF ~%state_label%~ STRING_EQUAL_CASE ~%VALUE%~ BEGIN
-        READ_2DA_ENTRY i 0 2 state_id
+        PATCH_IF ~%state_label%~ STRING_MATCHES_REGEXP ~^.+[0-9]+_STAT(%VALUE%)=n\b~ BEGIN
+            READ_2DA_ENTRY i 0 2 state_id
         SET index = state_id
         END
         END

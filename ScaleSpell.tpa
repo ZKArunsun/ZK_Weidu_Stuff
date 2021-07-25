@@ -554,7 +554,6 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                                     END                  
                                 END
                                 PATCH_IF($effect_scale("%l%_parameter_to_scale") STRING_EQUAL ~DICE_NUMBER~) BEGIN
-                                    PATCH_PRINT ~got here~
                                     READ_2DA_ENTRY k 12 12 local_dice_number
                                     PATCH_IF(local_dice_number + change_value>0) BEGIN
                                         SET_2DA_ENTRY k 12 12 (local_dice_number + change_value)
@@ -579,7 +578,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                                     END                  
                                 END
                                 READ_2DA_ENTRY k 14 14 local_save_type
-                                PATCH_IF($effect_scale("%l%_parameter_to_scale") STRING_EQUAL ~SAVING_THROW~ AND local_save_type = 0) BEGIN
+                                PATCH_IF($effect_scale("%l%_parameter_to_scale") STRING_EQUAL ~SAVING_THROW~ AND local_save_type != 0) BEGIN
                                     READ_2DA_ENTRY k 15 15 local_save_bonus                 
                                     PATCH_IF(local_save_bonus + change_value>0 - 10) BEGIN
                                         SET_2DA_ENTRY k 15 15 (local_save_bonus + change_value)
@@ -587,7 +586,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                                         SET_2DA_ENTRY k 15 15 (0 - 10)
                                     END                  
                                 END
-                                PATCH_IF($effect_scale("%l%_parameter_to_scale") STRING_EQUAL ~PROBABILITY_HIGH~ AND local_save_type = 0) BEGIN
+                                PATCH_IF($effect_scale("%l%_parameter_to_scale") STRING_EQUAL ~PROBABILITY_HIGH~) BEGIN
                                     READ_2DA_ENTRY k 10 10 local_probability_high
                                     PATCH_IF(local_probability_high + change_value<100) BEGIN
                                         SET_2DA_ENTRY k 10 10 (local_probability_high + change_value)

@@ -482,9 +482,9 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                 COUNT_2DA_ROWS 5 effect_scaling_number
                 effect_scaling_number -=1
                 FOR(i = 1; i < effect_scaling_number+1; ++i) BEGIN
-                    READ_2DA_ENTRY i 0 5 $effect_scale("%i%_step_size")
-                    READ_2DA_ENTRY i 1 5 $effect_scale("%i%_min_level")
-                    READ_2DA_ENTRY i 2 5 $effect_scale("%i%_max_level")
+                    READ_2DA_ENTRY i 0 5 $effect_scale("%i%_min_level")
+                    READ_2DA_ENTRY i 1 5 $effect_scale("%i%_max_level")
+                    READ_2DA_ENTRY i 2 5 $effect_scale("%i%_step_size")
                     READ_2DA_ENTRY i 3 5 $effect_scale("%i%_change_per_step")
                     READ_2DA_ENTRY i 4 5 $effect_scale("%i%_parameter_to_scale")
                     READ_2DA_ENTRY i 5 5 $effect_scale("%i%_effect_number")

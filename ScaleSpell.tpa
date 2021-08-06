@@ -1,4 +1,4 @@
-DEFINE_ACTION_FUNCTION ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = ~~ RET index  BEGIN
+DEFINE_ACTION_FUNCTION ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION INT_VAR OPERATION = 1 STR_VAR VALUE = ~~ OPERATION_STRING = ~=~  RET index  BEGIN
     OUTER_SET index = ~-1~
     COPY_EXISTING ~STATS.IDS~ override
         COUNT_2DA_ROWS 2 rows
@@ -11,14 +11,14 @@ DEFINE_ACTION_FUNCTION ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = ~
         END
     BUT_ONLY
 
-    ACTION_IF FILE_CONTAINS_EVALUATED (~SPLPROT.2DA~ ~^.+[0-9]+_STAT(%VALUE%)=n\b~) BEGIN
+    ACTION_IF FILE_CONTAINS_EVALUATED (~SPLPROT.2DA~ ~^.+[0-9]+_STAT(%VALUE%)%OPERATION_STRING%n\b~) BEGIN
         COPY_EXISTING ~SPLPROT.2DA~ override
         COUNT_2DA_ROWS 2 rows
         FOR (i = 0; i < rows; ++i) BEGIN
             READ_2DA_ENTRY i 0 2 state_label
             //PATCH_PRINT ~%state_label%~
             //PATCH_PRINT ~^.+[0-9]+_STAT(%VALUE%)=n\b~
-            PATCH_IF !(~%state_label%~ STRING_MATCHES_REGEXP ~^[0-9]+_STAT(%VALUE%)=n\b~) BEGIN
+            PATCH_IF !(~%state_label%~ STRING_MATCHES_REGEXP ~^[0-9]+_STAT(%VALUE%)%OPERATION_STRING%n\b~) BEGIN
                 READ_2DA_ENTRY i 0 2 state_id
                 LPF SUBSTRING INT_VAR start = 0 length = 3 STR_VAR string = EVAL ~%state_id%~ RET substring = substring END
                 PATCH_IF !(~%substring%~ STRING_MATCHES_REGEXP ~^[0-9]+$~) BEGIN
@@ -58,9 +58,9 @@ DEFINE_ACTION_FUNCTION ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = ~
             SET index = i
             SET i = 256
             PATCH_IF index <= rows BEGIN
-            INSERT_2DA_ROW index+3 1 ~%index%_STAT(%VALUE%)=n %stat_rank% -1 1~
+            INSERT_2DA_ROW index+3 1 ~%index%_STAT(%VALUE%)%OPERATION_STRING%n %stat_rank% -1 %OPERATION%~
             END ELSE BEGIN
-            INSERT_2DA_ROW rows+3 1 ~%index%_STAT(%VALUE%)=n %stat_rank% -1 1~
+            INSERT_2DA_ROW rows+3 1 ~%index%_STAT(%VALUE%)%OPERATION_STRING%n %stat_rank% -1 %OPERATION%~
             END
             END
             END
@@ -692,4 +692,429 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
     END
   
 
+END
+
+
+DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK = 0 STR_VAR SPELL_TO_PATCH = ~~ NEW_SPELL_RES = ~~ DESCRIPTION = ~+~ BEGIN
+    /*
+        The goal of this function is to make it so the spell SPELL_TO_PATCH only succeeds if the caster succeeds in hitting the target with a main-hand touch attack
+        The probability of hitting the spell is simulated based on the caster's base THAC0, main-hand effective to-hit bonus and the target's AC using the following logic:
+        Base THAC0 - Effective to-hit bonus = effective THAC0
+        A target is hit only if the attack roll is greater than THAC0 - AC so:
+        Score-To-Beat = THAC0-AC
+        Since spells use a percentage probability and attack role is a d20, the probability of hitting is:
+        Probability of hitting (in %) = (20-Score-To-Beat+1)*5 (e.g. if Score to Beat is 8, an attack roll would succeed if it's 8 or more, so the probability of hitting is 65%, which is (20-8+1)*5)
+        To mimic critical misses and critical hits, the probability of hitting will always be at least 5% and max 95%.
+        
+        Arguments:
+            -The BONUS_TO_APPLY argument allows you to add a "to-hit" bonus for the spell. The number can be positive or negative. A "+1" bonus results in an additional 5% to hit
+            -SPELL_TO_PATCH is the resref of the spell to which this should be applied
+            -NEW_SPELL_RES should contain the name of the original spell, that is eventually applied. Can be up to 7 letters.
+                -The original Spell is copied NEW_SPELL_RES. It is cast by the final "layer" of scaling
+                -The spell that should be cast to mimic the original spell with a touch hit is NEW_SPELL_RES
+            -DESCRIPTION contains the updated description of the spell. If it starts with a +, then whatever is after the + is added to the existing description.
+            - This function will work for any AC ranging from -30 to +30, for any base THAC0 from -20 to +20, for any to-hit bonus from -49 to +50;
+                - AC without modifiers is capped at -28 (-20 base, -6 dex, -2 for Single Weapon Style **) and +25 (base 20, +5 for 1 dex) 
+                - Natural THAC0 goes from +20 to -20
+                - To hit bonus has no cap per se, but a level 40 Kensai with 25 strength and a +6 weapon would have +26 which leaves a fair margin for misc buffs.
+        Limitations:
+            - This function does not currently take critical hits and misses bonuses (such as that provided by the Critical Strike HLA) into account
+                - This would be technically possible but would take a while. Feel free to raise a PR if you feel like coding it
+            - This function uses the caster's current weapon, along with the bonuses that come with it. Most notably:
+                - If the caster uses an enchanted weapon, the enchantment is added to their effective to-hit bonus
+                - If the caster uses a melee weapon, the simulated attack roll is made with the melee bonuses of the caster, even if the spell is ranged
+            - This function does not take specific AC modifiers (vs crushing etc...) into account
+            - The "Score-To-Beat" is briefly stored in the Magic Cold Resistance of the caster, which can result in unintended behavior if other mods use this stat as well.
+                - This stat is generally useless as no spell use it and spells that would use it crash the game. 
+            - Due to engine limitations in how delegated effects are applied, this spell uses a lot of intermediate spells:
+                - The first call to the function will create a bunch of spells (~640). These spells are reused for subsequent spells to which this function is applied
+                - Each call to the function will create 7 spells. The resources used for these are %NEW_SPELL_RES% and %NEW_SPELL_RES%A through %NEW_SPELL_RES%F. These resources are necessary for the spell to work and should not be overwritten
+    
+        
+    */
+
+    /*
+        The spells created here are used to temporarily store the saving throw difficulty into the MAGICAL COLD RESIST stat of the caster
+        Due to engine limitations, the "SET" operator must be used instead of the "INCREMENT", hence the expanding ranges and overall increased number of spells
+            This is because the INCREMENT operation takes effect at the next game tick whereas the entire spell is executed in one tick. The SET operator however is set instantly
+    */
+    ACTION_IF(!(FILE_EXISTS_IN_GAME ~ZKTHA.spl~)) BEGIN
+        LAF ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = ~THAC0~ RET thac0index = index END
+        LAF ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = ~ARMORCLASS~ RET acindex = index END
+        LAF ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = ~THAC0BONUSRIGHT~ RET thac0bonusindex = index END
+        //Base THAC0 ranges from -20 to 20
+        OUTER_FOR (i=0 - 20; i<=20; ++i) BEGIN
+            OUTER_SET j = i+20
+            COPY ~%MOD_FOLDER%/spl/ZKTAC00.spl~ ~override/ZKTHA%j%.spl~
+                SAY 0x8 #-1
+                
+                WRITE_LONG 0x9e i
+                FOR (k=0 - 30; k<=30; ++k) BEGIN
+                    SET l = k+i+50
+                    LPF ADD_SPELL_EFFECT 
+                    INT_VAR
+                        opcode=326
+                        target = 2
+                        timing = 0
+                        parameter1 = 0 - k
+                        parameter2 = acindex
+                        duration = 1
+                        STR_VAR
+                        resource = EVAL ~ZKTAC%l%~ 
+                    END
+                END
+        END
+        //AC ranges from -30 to +30, so AC + Base THAC0 ranges from -50 to +50
+        OUTER_FOR (i=0 - 50; i<=50; ++i) BEGIN
+            OUTER_SET j = i+50
+            COPY ~%MOD_FOLDER%/spl/ZKTAC00.spl~ ~override/ZKTAC%j%.spl~
+                SAY 0x8 #-1
+                WRITE_LONG 0x9e i
+                FOR (k=0 - 50; k<=50; ++k) BEGIN
+                    SET l = i - k + 100
+                    LPF ADD_SPELL_EFFECT 
+                    INT_VAR
+                        opcode=326
+                        target = 9
+                        timing = 0
+                        parameter1 = k
+                        parameter2 = thac0bonusindex
+                        duration = 1
+                        STR_VAR
+                        resource = EVAL ~ZKTHB%l%~ 
+                    END
+                END
+        END
+        // THAC0 bonus for the purpose of this function is capped to -50/+50, which extends the ranges to -100;100
+        OUTER_FOR (i=0 - 100; i<=100; ++i) BEGIN
+            OUTER_SET j = i+100
+            COPY ~%MOD_FOLDER%/spl/ZKTAC00.spl~ ~override/ZKTHB%j%.spl~
+                SAY 0x8 #-1
+                WRITE_LONG 0x9e i
+        END
+        // The stat limit is -127;127. Practical applications for those are virtually non existent. Anything that would exceed 127 one way or the other is set to 127 instead
+        OUTER_FOR (i=0 - 127; i<=127; ++i) BEGIN
+            OUTER_SET j = i+127
+            COPY ~%MOD_FOLDER%/spl/ZKTAC00.spl~ ~override/ZKBTA%j%.spl~
+                WRITE_LONG 0x9e 0 - i
+                SAY 0x8 #-1
+
+        END
+        COPY ~%MOD_FOLDER%/spl/ZKTAC.spl~ ~override/ZKTHA.spl~
+            SAY 0x8 #-1
+            FOR (i=0 - 20; i<=20; ++i) BEGIN
+                SET j = i+20
+                LPF ADD_SPELL_EFFECT 
+                INT_VAR
+                    opcode=326
+                    target = 9
+                    timing = 0
+                    parameter1 = i
+                    parameter2 = thac0index
+                    duration = 1
+                    STR_VAR
+                    resource = EVAL ~ZKTHA%j%~ 
+                END
+            END
+        //These two spells are feedback spells that tell you the roll you made and the necessary roll to hit
+        OUTER_FOR(i = 1; i<=20;++i) BEGIN
+            COPY ~%MOD_FOLDER%/spl/zkfeed.spl~ ~override/zkfeed%i%.spl~
+                SAY 0x8 #-1
+                SAY 0x9e ~Roll: %i%~
+        END
+
+        OUTER_FOR(i = 2 ; i <=20;++i) BEGIN
+            COPY ~%MOD_FOLDER%/spl/zkfeed.spl~ ~override/zkmc%i%.spl~
+                SAY 0x8 #-1
+                SAY 0x9e ~Minimum Roll To Beat: %i%~
+        END
+
+        
+    END
+    LAF ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = ~RESISTMAGICCOLD~ RET rmcindex = index END
+    LAF ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION INT_VAR OPERATION = 4 STR_VAR OPERATION_STRING = ">=" VALUE = ~RESISTMAGICCOLD~ RET rmcgindex = index END
+    LAF ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION INT_VAR OPERATION = 0 STR_VAR OPERATION_STRING = "<="VALUE = ~RESISTMAGICCOLD~ RET rmclindex = index END
+    
+    //Remove projectile on the final spell as it will be thrown by the first spell, like arrows that miss for instance. The final spell is the one with the actual effects
+    COPY_EXISTING ~%SPELL_TO_PATCH%.spl~ ~override/%NEW_SPELL_RES%.spl~
+            READ_SHORT 0x98 projectile
+            LPF ALTER_SPELL_HEADER
+                INT_VAR
+                projectile = 1
+            END
+    //Replace the original spell with a standard one that keeps everything the same regarding the spell header, but changes the effects to cast the intermediate spells
+    COPY_EXISTING ~%SPELL_TO_PATCH%.spl~ override 
+        READ_BYTE 0x72 type
+        READ_BYTE 0x74 location
+        READ_BYTE 0x7e target
+        READ_BYTE 0x7f target_number
+        READ_SHORT 0x80 range 
+        READ_SHORT 0x84 casting_speed
+        READ_ASCII 0x76 icon
+        READ_LONG 0x50 string_reference
+        PATCH_IF (DESCRIPTION STRING_MATCHES_REGEXP "^\+.*") BEGIN 
+            GET_STRREF string_reference current_description
+            SET string_length = STRING_LENGTH "%DESCRIPTION%"
+            LPF SUBSTRING INT_VAR start = 1 length = string_length - 1 STR_VAR string = EVAL "%DESCRIPTION%" RET DESCRIPTION = substring END
+            SPRINT current_description "%current_description%" ^ "%DESCRIPTION%"
+            SAY 0x50 "%current_description%"
+        END ELSE BEGIN 
+            SAY 0x50 "%DESCRIPTION%"
+        END
+
+        LPF DELETE_SPELL_HEADER INT_VAR header_type = (0 - 1) END
+        LPF ADD_SPELL_HEADER
+            INT_VAR
+            type = type
+            location = location
+            target = target
+            target_number = target_number
+            range = range
+            minimum_level = 1
+            casting_speed = casting_speed
+            projectile = projectile      
+            STR_VAR 
+            icon = EVAL ~%icon%~
+            END
+        
+        
+        LPF ADD_SPELL_EFFECT 
+        INT_VAR opcode=326
+            target = 9
+            timing = 0
+            parameter1 = 0
+            parameter2 = 0
+            duration = 1
+            STR_VAR
+            resource = EVAL ~ZKTHA~ 
+            END
+        LPF ADD_SPELL_EFFECT 
+            INT_VAR opcode=326
+                target = 9
+                timing = 0
+                parameter1 = 0
+                parameter2 = 0
+                duration = 1
+                STR_VAR
+                resource = EVAL ~%NEW_SPELL_RES%A~ 
+            END
+    /*Create intermediate spells.
+      This is necessary because intermediate spells are applied in "layers".
+      The spell that calculates the difficulty of the attack roll has 4 layers, so here we need at least as many before the actual spell is applied, to make sure everything is accounted for. An extra 2 are added for BONUS_TO_APPLY
+    */
+    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%A.spl~
+        SAY 0x8 #-1
+        WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%B~
+    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%B.spl~
+        SAY 0x8 #-1
+        WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%C~
+    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%C.spl~
+        SAY 0x8 #-1
+        WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%D~
+    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%D.spl~
+        SAY 0x8 #-1
+        PATCH_IF(BONUS_TO_APPLY != 0) BEGIN
+            FOR (k=0 - 127; k<=127; ++k) BEGIN
+                SET m = k - BONUS_TO_APPLY
+                SET l = 254 - (k + 127 - BONUS_TO_APPLY)
+                PATCH_IF (m < 0 - 127) BEGIN
+                    SET l = 254
+                END
+                PATCH_IF(m > 127) BEGIN 
+                    SET l = 0
+                END
+                LPF ADD_SPELL_EFFECT 
+                INT_VAR
+                    opcode=326
+                    target = 9
+                    timing = 0
+                    parameter1 = k
+                    parameter2 = rmcindex
+                    duration = 1
+                    STR_VAR
+                    resource = EVAL ~ZKBTA%l%~ 
+                END
+            END
+        END
+        WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%E~
+        
+    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%E.spl~
+        SAY 0x8 #-1
+        WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%F~
+    /*
+        This is the penultimate spell, where the magic happens:
+            At this point the necessary attack roll is stored in the caster's magical cold resistance
+            If feedback is activated, this will cast the appropriate ZKFEED and ZKMC spells
+                The former contains the simulated attack roll for this spell
+                The latter contains the attack roll's difficulty
+                Both are purely cosmetic and will display a message giving the value of the simulated roll, as well as the minimum value to beat for the spell to hit.
+            The spell is cast based on the attack roll of the caster, compared to the necessary attack roll:
+                To get the value of the simulated d20 out of the rolled d100, one must subtract 1 to the d100, divide by 5 and add 1
+                    e.g. if the d100 is 43, then 42/5 = 8, 8+1 = 9, the simulated roll. If the d100 is 61, then 60/5 = 12, 12+1 = 13, the simulated roll.
+    */
+    COPY ~%MOD_FOLDER%/spl/zkinterf.spl~ ~override/%NEW_SPELL_RES%F.spl~
+        SAY 0x8 #-1
+        PATCH_IF(WITH_FEEDBACK = 1) BEGIN
+            FOR (i = 1; i<=20;++i) BEGIN            
+                LPF ADD_SPELL_EFFECT 
+                INT_VAR opcode=326
+                target = 9
+                timing = 0
+                parameter1 = 0
+                parameter2 = 0
+                duration = 1
+                probability1 = 5 * i
+                probability2 = 5 * (i - 1) + 1
+                STR_VAR
+                resource = EVAL ~zkfeed%i%~ 
+                END 
+            END
+            LPF ADD_SPELL_EFFECT 
+                INT_VAR opcode=326
+                    target = 9
+                    timing = 0
+                    parameter1 = 128
+                    parameter2 = rmcgindex
+                    duration = 1
+                STR_VAR
+                    resource = EVAL ~zkmc2~ 
+            END
+            LPF ADD_SPELL_EFFECT 
+                INT_VAR opcode=326
+                    target = 9
+                    timing = 0
+                    parameter1 = 2
+                    parameter2 = rmclindex
+                    duration = 1
+                STR_VAR
+                    resource = EVAL ~zkmc2~ 
+            END 
+        END
+        LPF ADD_SPELL_EFFECT 
+            INT_VAR
+                opcode=326
+                target = 9
+                timing = 0
+                parameter1 = 128
+                parameter2 = rmcgindex
+                duration = 1
+                probability2 = 6
+            STR_VAR
+                resource = EVAL ~%NEW_SPELL_RES%~ 
+        END 
+        LPF ADD_SPELL_EFFECT 
+            INT_VAR
+                opcode=326
+                target = 9
+                timing = 0
+                parameter1 = 2
+                parameter2 = rmclindex
+                duration = 1
+                probability2 = 6
+            STR_VAR
+                resource = EVAL ~%NEW_SPELL_RES%~ 
+        END 
+        FOR (i = 3; i<=19;++i) BEGIN
+            PATCH_IF(WITH_FEEDBACK = 1) BEGIN
+                LPF ADD_SPELL_EFFECT 
+                    INT_VAR opcode=326
+                        target = 9
+                        timing = 0
+                        parameter1 = i
+                        parameter2 = rmcindex
+                        duration = 1
+                        probability1 = 100
+                    STR_VAR
+                        resource = EVAL ~zkmc%i%~ 
+                END 
+            END
+            LPF ADD_SPELL_EFFECT 
+                INT_VAR opcode=326
+                    target = 9
+                    timing = 0
+                    parameter1 = i
+                    parameter2 = rmcindex
+                    duration = 1
+                    probability2 = 5*i - 4
+                STR_VAR
+                    resource = EVAL ~%NEW_SPELL_RES%~ 
+            END 
+            
+        END
+        FOR(i=20;i<=127;++i) BEGIN
+            PATCH_IF(WITH_FEEDBACK = 1) BEGIN
+                LPF ADD_SPELL_EFFECT 
+                    INT_VAR opcode=326
+                        target = 9
+                        timing = 0
+                        parameter1 = i
+                        parameter2 = rmcindex
+                        duration = 1
+                        probability1 = 100
+                    STR_VAR
+                        resource = EVAL ~zkmc20~ 
+                END 
+            END
+            LPF ADD_SPELL_EFFECT 
+                INT_VAR opcode=326
+                    target = 9
+                    timing = 0
+                    parameter1 = i
+                    parameter2 = rmcindex
+                    duration = 1
+                    probability2 = 96
+                STR_VAR
+                    resource = EVAL ~%NEW_SPELL_RES%~ 
+            END 
+        END        
+
+        FOR(i=0;i<=40;++i) BEGIN
+            LPF ADD_SPELL_EFFECT 
+            INT_VAR opcode=321
+                target = 9
+                timing = 0
+                parameter1 = 0
+                parameter2 = 0
+                duration = 0
+            STR_VAR
+                resource = EVAL ~ZKTHA%i%~ 
+        END 
+        END
+        FOR(i=0;i<=100;++i) BEGIN
+            LPF ADD_SPELL_EFFECT 
+            INT_VAR opcode=321
+                target = 9
+                timing = 0
+                parameter1 = 0
+                parameter2 = 0
+                duration = 0
+            STR_VAR
+                resource = EVAL ~ZKTAC%i%~ 
+            END 
+        END
+        FOR(i=0;i<=200;++i) BEGIN
+            LPF ADD_SPELL_EFFECT 
+            INT_VAR opcode=321
+                target = 9
+                timing = 0
+                parameter1 = 0
+                parameter2 = 0
+                duration = 0
+            STR_VAR
+                resource = EVAL ~ZKTHB%i%~ 
+            END
+        END
+        FOR(i=0;i<=254;++i) BEGIN
+            LPF ADD_SPELL_EFFECT 
+            INT_VAR opcode=321
+                target = 9
+                timing = 0
+                parameter1 = 0
+                parameter2 = 0
+                duration = 0
+            STR_VAR
+                resource = EVAL ~ZKBTA%i%~ 
+            END  
+        END
+    
 END

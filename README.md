@@ -12,5 +12,5 @@ As of now, the available functions are related to spell creation:
 * SCALE_SPELL_WITH_LEVEL allows easy scaling of as many effects of a spell as wanted, based on level and regular intervals. With a proper 2da and a spell with at least one existing ability, this can handle any basic scaling of spells depending on level (dice number, dice size, saving throw,...)
 * SPELL_HIT_CHECK mimicks a touch attack for the spell. The spell only hits if that "fake" touch attack is successful
 
-To use this, simply include ScaleSpell.tpa, the 2da, spl and temp folders into your mod folder and add the following line to your mod before you use the functions:
+To use this, simply include ScaleSpell.tpa and the ScaleSpell folder into your mod folder and add the following line to your mod before you use the functions:
 INCLUDE \~%MOD_FOLDER%/ScaleSpell.TPA\~

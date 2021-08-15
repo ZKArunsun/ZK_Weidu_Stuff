@@ -159,7 +159,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL INT_VAR STEP_SIZE = 1 PIVOT_VALUE = 10 TARGET
 
     LAF ADD_OR_RETRIEVE_STAT_EQ_VALUE_CONDITION STR_VAR VALUE = EVAL ~%STAT%~ RET stat_index = index END
     //Defining Extra Characters. To move to 2DA
-    COPY ~%MOD_FOLDER%/2da/chars.2da~  ~%MOD_FOLDER%/2da/chars.2da~
+    COPY ~%MOD_FOLDER%/ScaleSpell/2da/chars.2da~  ~%MOD_FOLDER%/ScaleSpell/2da/chars.2da~
     FOR(k = 1;k<41;++k) BEGIN
         READ_2DA_ENTRY k - 1 0 1 extra_char
         SPRINT $extra_char("%k%")  "%extra_char%"
@@ -403,7 +403,7 @@ DEFINE_ACTION_FUNCTION MULTI_SCALE_SPELL INT_VAR i = 1 STR_VAR TABLE_PATH = ~~  
             OUTER_SET NUMBER_OF_STEPS = UPPER_STEPS + LOWER_STEPS +1
             LAF SCALE_SPELL INT_VAR STEP_SIZE = step_size PIVOT_VALUE = pivot_value TARGET = target  CHANGE_PER_STEP = change_per_step STAT_LOWER_LIMIT = stat_lower_limit STAT_UPPER_LIMIT = stat_upper_limit STR_VAR STAT = EVAL ~%stat%~ ORIGINAL_RESOURCE = EVAL ~%ORIGINAL_RESOURCE%~ NEW_RESOURCE_BASE = EVAL ~%NEW_RESOURCE_BASE%~ PARAMETER_TO_SCALE = EVAL "%parameter_to_scale%" DESCRIPTION = EVAL ~%DESCRIPTION%~ END
             ACTION_IF(i < row_count - 1) BEGIN
-            COPY ~%MOD_FOLDER%/2da/chars.2da~  ~%MOD_FOLDER%/2da/chars.2da~
+            COPY ~%MOD_FOLDER%/ScaleSpell/2da/chars.2da~  ~%MOD_FOLDER%/ScaleSpell/2da/chars.2da~
                 FOR(k = 1;k<41;++k) BEGIN
                 READ_2DA_ENTRY k - 1 0 1 extra_char
                 SPRINT $extra_char("%k%")  "%extra_char%"
@@ -486,13 +486,13 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
             READ_LONG ability_effect_offset + i*0x30 +0x28 save_bonus
             READ_LONG ability_effect_offset + i*0x30 +0x2c special
             INNER_ACTION BEGIN
-                ACTION_IF(!FILE_EXISTS ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.1.2da~) BEGIN
+                ACTION_IF(!FILE_EXISTS ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.1.2da~) BEGIN
                     
-                    COPY ~%MOD_FOLDER%/2da/empty_effect_table.2da~  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.1.2da~
+                    COPY ~%MOD_FOLDER%/ScaleSpell/2da/empty_effect_table.2da~  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.1.2da~
                         INSERT_2DA_ROW i+1 1 ~0 %opcode% %effect_target% %power% %parameter1% %parameter2% %timing% %dispel% %duration% %probability_low% %probability_high% %resource% %dice_number% %dice_size% %save_type% %save_bonus% %special%~
                 
                 END ELSE BEGIN 
-                    COPY  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.1.2da~  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.1.2da~
+                    COPY  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.1.2da~  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.1.2da~
                         INSERT_2DA_ROW i+1 1 ~0 %opcode% %effect_target% %power% %parameter1% %parameter2% %timing% %dispel% %duration% %probability_low% %probability_high% %resource% %dice_number% %dice_size% %save_type% %save_bonus% %special%~
                 
                 END
@@ -519,7 +519,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
             OUTER_FOR(j = SCALING_START_LEVEL; j<= MAX_LEVEL; ++j) BEGIN                     
                 OUTER_SET previous_file = j = SCALING_START_LEVEL?1:j - 1
 
-                COPY  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.%previous_file%.2da~  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.%j%.2da~
+                COPY  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.%previous_file%.2da~  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.%j%.2da~
                     //PATCH_PRINT ~Number of effects in ability: %ability_number_of_effects%~
                     FOR(k = 1; k<=ability_number_of_effects; ++k) BEGIN
                         SET header = j + 1 - SCALING_START_LEVEL
@@ -601,18 +601,18 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
                    
             END
             OUTER_FOR(j = SCALING_START_LEVEL; j<=MAX_LEVEL; ++j) BEGIN                     
-                COPY  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.%j%.2da~  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.%j%.2da~                    
+                COPY  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.%j%.2da~  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.%j%.2da~                    
                     REMOVE_2DA_ROW 0 0
                     
             END
-            COPY  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.1.2da~  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~
+            COPY  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.1.2da~  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.effects.2da~
                 FOR(j = SCALING_START_LEVEL; j<= MAX_LEVEL; ++j) BEGIN                    
-                    APPEND_FILE_EVALUATE TEXT ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.%j%.2da~
+                    APPEND_FILE_EVALUATE TEXT ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.%j%.2da~
                 END
-            DELETE  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.1.2da~
+            DELETE  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.1.2da~
 
             OUTER_FOR (j = SCALING_START_LEVEL; j<= MAX_LEVEL; ++j) BEGIN
-                DELETE  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.%j%.2da~
+                DELETE  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.%j%.2da~
             END
         END
 
@@ -636,7 +636,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
             icon = EVAL ~%icon%~
             END
         END
-    COPY  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~  ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~
+    COPY  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.effects.2da~  ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.effects.2da~
         COUNT_2DA_ROWS 0 number_of_effects_to_create
         FOR(i=1; i<number_of_effects_to_create;++i) BEGIN
             READ_2DA_ENTRY i 0 0 $effects_to_create("%i%_header")
@@ -660,7 +660,7 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL_WITH_LEVEL INT_VAR SCALING_START_LEVEL = 2 MA
             END
         END
     BUT_ONLY
-    DELETE ~%MOD_FOLDER%/temp/2da/%SPELL_TO_PATCH%.effects.2da~
+    DELETE ~%MOD_FOLDER%/ScaleSpell/temp/2da/%SPELL_TO_PATCH%.effects.2da~
     
 
    
@@ -745,7 +745,7 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
         //Base THAC0 ranges from -20 to 20
         OUTER_FOR (i=0 - 20; i<=20; ++i) BEGIN
             OUTER_SET j = i+20
-            COPY ~%MOD_FOLDER%/spl/ZKTAC00.spl~ ~override/ZKTHA%j%.spl~
+            COPY ~%MOD_FOLDER%/ScaleSpell/spl/ZKTAC00.spl~ ~override/ZKTHA%j%.spl~
                 SAY 0x8 #-1
                 
                 WRITE_LONG 0x9e i
@@ -767,7 +767,7 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
         //AC ranges from -30 to +30, so AC + Base THAC0 ranges from -50 to +50
         OUTER_FOR (i=0 - 50; i<=50; ++i) BEGIN
             OUTER_SET j = i+50
-            COPY ~%MOD_FOLDER%/spl/ZKTAC00.spl~ ~override/ZKTAC%j%.spl~
+            COPY ~%MOD_FOLDER%/ScaleSpell/spl/ZKTAC00.spl~ ~override/ZKTAC%j%.spl~
                 SAY 0x8 #-1
                 WRITE_LONG 0x9e i
                 FOR (k=0 - 50; k<=50; ++k) BEGIN
@@ -788,19 +788,19 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
         // THAC0 bonus for the purpose of this function is capped to -50/+50, which extends the ranges to -100;100
         OUTER_FOR (i=0 - 100; i<=100; ++i) BEGIN
             OUTER_SET j = i+100
-            COPY ~%MOD_FOLDER%/spl/ZKTAC00.spl~ ~override/ZKTHB%j%.spl~
+            COPY ~%MOD_FOLDER%/ScaleSpell/spl/ZKTAC00.spl~ ~override/ZKTHB%j%.spl~
                 SAY 0x8 #-1
                 WRITE_LONG 0x9e i
         END
         // The stat limit is -127;127. Practical applications for those are virtually non existent. Anything that would exceed 127 one way or the other is set to 127 instead
         OUTER_FOR (i=0 - 127; i<=127; ++i) BEGIN
             OUTER_SET j = i+127
-            COPY ~%MOD_FOLDER%/spl/ZKTAC00.spl~ ~override/ZKBTA%j%.spl~
+            COPY ~%MOD_FOLDER%/ScaleSpell/spl/ZKTAC00.spl~ ~override/ZKBTA%j%.spl~
                 WRITE_LONG 0x9e 0 - i
                 SAY 0x8 #-1
 
         END
-        COPY ~%MOD_FOLDER%/spl/ZKTAC.spl~ ~override/ZKTHA.spl~
+        COPY ~%MOD_FOLDER%/ScaleSpell/spl/ZKTAC.spl~ ~override/ZKTHA.spl~
             SAY 0x8 #-1
             FOR (i=0 - 20; i<=20; ++i) BEGIN
                 SET j = i+20
@@ -818,13 +818,13 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
             END
         //These two spells are feedback spells that tell you the roll you made and the necessary roll to hit
         OUTER_FOR(i = 1; i<=20;++i) BEGIN
-            COPY ~%MOD_FOLDER%/spl/zkfeed.spl~ ~override/zkfeed%i%.spl~
+            COPY ~%MOD_FOLDER%/ScaleSpell/spl/zkfeed.spl~ ~override/zkfeed%i%.spl~
                 SAY 0x8 #-1
                 SAY 0x9e ~Roll: %i%~
         END
 
         OUTER_FOR(i = 2 ; i <=20;++i) BEGIN
-            COPY ~%MOD_FOLDER%/spl/zkfeed.spl~ ~override/zkmc%i%.spl~
+            COPY ~%MOD_FOLDER%/ScaleSpell/spl/zkfeed.spl~ ~override/zkmc%i%.spl~
                 SAY 0x8 #-1
                 SAY 0x9e ~Minimum Roll To Beat: %i%~
         END
@@ -902,16 +902,16 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
       This is necessary because intermediate spells are applied in "layers".
       The spell that calculates the difficulty of the attack roll has 4 layers, so here we need at least as many before the actual spell is applied, to make sure everything is accounted for. An extra 2 are added for BONUS_TO_APPLY
     */
-    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%A.spl~
+    COPY ~%MOD_FOLDER%/ScaleSpell/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%A.spl~
         SAY 0x8 #-1
         WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%B~
-    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%B.spl~
+    COPY ~%MOD_FOLDER%/ScaleSpell/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%B.spl~
         SAY 0x8 #-1
         WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%C~
-    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%C.spl~
+    COPY ~%MOD_FOLDER%/ScaleSpell/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%C.spl~
         SAY 0x8 #-1
         WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%D~
-    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%D.spl~
+    COPY ~%MOD_FOLDER%/ScaleSpell/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%D.spl~
         SAY 0x8 #-1
         PATCH_IF(BONUS_TO_APPLY != 0) BEGIN
             FOR (k=0 - 127; k<=127; ++k) BEGIN
@@ -938,7 +938,7 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
         END
         WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%E~
         
-    COPY ~%MOD_FOLDER%/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%E.spl~
+    COPY ~%MOD_FOLDER%/ScaleSpell/spl/zkinter.spl~ ~override/%NEW_SPELL_RES%E.spl~
         SAY 0x8 #-1
         WRITE_ASCIIE 0xae  ~%NEW_SPELL_RES%F~
     /*
@@ -952,7 +952,7 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
                 To get the value of the simulated d20 out of the rolled d100, one must subtract 1 to the d100, divide by 5 and add 1
                     e.g. if the d100 is 43, then 42/5 = 8, 8+1 = 9, the simulated roll. If the d100 is 61, then 60/5 = 12, 12+1 = 13, the simulated roll.
     */
-    COPY ~%MOD_FOLDER%/spl/zkinterf.spl~ ~override/%NEW_SPELL_RES%F.spl~
+    COPY ~%MOD_FOLDER%/ScaleSpell/spl/zkinterf.spl~ ~override/%NEW_SPELL_RES%F.spl~
         SAY 0x8 #-1
         PATCH_IF(WITH_FEEDBACK = 1) BEGIN
             FOR (i = 1; i<=20;++i) BEGIN            
@@ -1067,7 +1067,7 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
                     resource = EVAL ~%NEW_SPELL_RES%~ 
             END 
         END        
-
+        
         FOR(i=0;i<=40;++i) BEGIN
             LPF ADD_SPELL_EFFECT 
             INT_VAR opcode=321
@@ -1104,17 +1104,20 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
                 resource = EVAL ~ZKTHB%i%~ 
             END
         END
-        FOR(i=0;i<=254;++i) BEGIN
-            LPF ADD_SPELL_EFFECT 
-            INT_VAR opcode=321
-                target = 9
-                timing = 0
-                parameter1 = 0
-                parameter2 = 0
-                duration = 0
-            STR_VAR
-                resource = EVAL ~ZKBTA%i%~ 
-            END  
+        PATCH_IF(BONUS_TO_APPLY != 0) BEGIN
+            FOR(i=0;i<=254;++i) BEGIN
+                LPF ADD_SPELL_EFFECT 
+                INT_VAR opcode=321
+                    target = 9
+                    timing = 0
+                    parameter1 = 0
+                    parameter2 = 0
+                    duration = 0
+                STR_VAR
+                    resource = EVAL ~ZKBTA%i%~ 
+                END  
+            END
         END
+        
     
 END

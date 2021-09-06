@@ -746,14 +746,17 @@ DEFINE_ACTION_FUNCTION SPELL_HIT_CHECK INT_VAR BONUS_TO_APPLY = 0 WITH_FEEDBACK 
         Limitations:
             - This function does not currently take critical hits and misses bonuses (such as that provided by the Critical Strike HLA) into account
                 - This would be technically possible but would take a while. Feel free to raise a PR if you feel like coding it
+            - This function cannot be used for individual checks for every target in an AoE Spell, as only "Score-To-Beat" can be calculated at a given time
+                - Notably, it cannot be used to make it so Sun Soulbeam work as described
+                - It can however be used on AoE spells that have a central target, but then hit the entire AoE if that target is hit
             - This function uses the caster's current weapon, along with the bonuses that come with it. Most notably:
                 - If the caster uses an enchanted weapon, the enchantment is added to their effective to-hit bonus
                 - If the caster uses a melee weapon, the simulated attack roll is made with the melee bonuses of the caster, even if the spell is ranged
             - This function does not take specific AC modifiers (vs crushing etc...) into account
-            - The "Score-To-Beat" is briefly stored in the Magic Cold Resistance of the caster, which can result in unintended behavior if other mods use this stat as well.
-                - This stat is generally useless as no spell use it and spells that would use it crash the game. 
+            - The "Score-To-Beat" is very briefly (for 1 game tick) stored in the Magic Cold Resistance of the caster, which can result in unintended behavior if other mods use this stat as well.
+                - This stat is generally useless as no spell use it and spells that would use it crash the game if they kill anyone. 
             - Due to engine limitations in how delegated effects are applied, this spell uses a lot of intermediate spells:
-                - The first call to the function will create a bunch of spells (~640). These spells are reused for subsequent spells to which this function is applied
+                - The first call to the function will create a bunch of spells (~640). These spells are reused for subsequent spells to which this function is applied. If another mod make use of the function, the spells are not duplicated either.
                 - Each call to the function will create 7 spells. The resources used for these are %NEW_SPELL_RES% and %NEW_SPELL_RES%A through %NEW_SPELL_RES%F. These resources are necessary for the spell to work and should not be overwritten
     
         

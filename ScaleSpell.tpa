@@ -166,205 +166,231 @@ DEFINE_ACTION_FUNCTION SCALE_SPELL INT_VAR STEP_SIZE = 1 PIVOT_VALUE = 10 TARGET
     END
     BUT_ONLY
 
-    COPY_EXISTING ~%ORIGINAL_RESOURCE%.SPL~ override
-    FOR (j = 1; j < NUMBER_OF_STEPS+1; ++j) BEGIN
-        INNER_ACTION BEGIN
-        OUTER_SPRINT current_char $extra_char("%j%")
-        OUTER_SPRINT spell_name "%NEW_RESOURCE_BASE%"^"%current_char%"
-        //PRINT "%spell_name%"
-        COPY_EXISTING ~%ORIGINAL_RESOURCE%.SPL~  ~override/%spell_name%.SPL~
-            SAY 0x8 #-1
-            SAY 0xc #-1
-            SAY 0x54 #-1
-            SAY 0x50 #-1
-            SET change_value = 0 - (LOWER_STEPS - j +1) * CHANGE_PER_STEP
-            /*
-            Ability Length: 0x28
-            Effect Number Offset:0x1E
-            */
-            SET number_effects = 0
-            READ_LONG 0x64 abilities_offset
-            READ_SHORT 0x68 number_abilities
-            FOR(i = 0; i < number_abilities; ++i) BEGIN
-            READ_SHORT abilities_offset+i*0x28+0x1E local_number_effect
-            SET number_effects = number_effects + local_number_effect
-            END
-            /*Effect length: 0x30
-            DURATION: start +0x0E (14): Only if base duration is 6+, to a minimum of 6, if timing mode is 0
-            DICE_SIZE: start + 0x20 (32): Only for damage, to a minimum of 1.
-            DICE_NUMBER: start +0x1C (28): Only for damage, to a minimum of 1
-            SAVING_THROW: start + 0x28 (40): Only if Save is not empty, to a minimum of -10
-            AMOUNT: start +0x04 (4): Only for Damage, to a minimum of 0
-            */
-            READ_LONG 0x6a effect_offset
-            READ_SHORT 0x70 number_global_effect
+    COPY_EXISTING ~%ORIGINAL_RESOURCE%.SPL~ ~override/%NEW_RESOURCE_BASE%&.spl~
+        FOR (j = 1; j < NUMBER_OF_STEPS+1; ++j) BEGIN
+            INNER_ACTION BEGIN
+            OUTER_SPRINT current_char $extra_char("%j%")
+            OUTER_SPRINT spell_name "%NEW_RESOURCE_BASE%"^"%current_char%"
+            //PRINT "%spell_name%"
+            COPY_EXISTING ~%ORIGINAL_RESOURCE%.SPL~  ~override/%spell_name%.SPL~
+                SAY 0x8 #-1
+                SAY 0xc #-1
+                SAY 0x54 #-1
+                SAY 0x50 #-1
+            LPF ALTER_SPELL_HEADER INT_VAR projectile = 1 END
+                SET change_value = 0 - (LOWER_STEPS - j +1) * CHANGE_PER_STEP
+                /*
+                Ability Length: 0x28
+                Effect Number Offset:0x1E
+                */
+                SET number_effects = 0
+                READ_LONG 0x64 abilities_offset
+                READ_SHORT 0x68 number_abilities
+                FOR(i = 0; i < number_abilities; ++i) BEGIN
+                READ_SHORT abilities_offset+i*0x28+0x1E local_number_effect
+                SET number_effects = number_effects + local_number_effect
+                END
+                /*Effect length: 0x30
+                DURATION: start +0x0E (14): Only if base duration is 6+, to a minimum of 6, if timing mode is 0
+                DICE_SIZE: start + 0x20 (32): Only for damage, to a minimum of 1.
+                DICE_NUMBER: start +0x1C (28): Only for damage, to a minimum of 1
+                SAVING_THROW: start + 0x28 (40): Only if Save is not empty, to a minimum of -10
+                AMOUNT: start +0x04 (4): Only for Damage, to a minimum of 0
+                */
+                READ_LONG 0x6a effect_offset
+                READ_SHORT 0x70 number_global_effect
 
-            PATCH_IF(i<LOWER_STEPS+1) BEGIN
-            
-            FOR(i = 0; i < number_effects; ++i) BEGIN
-                SET local_effect_offset = effect_offset + (i+number_global_effect)*0x30
-                READ_BYTE (local_effect_offset + 0x0C) local_timing_mode
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DURATION~ AND local_timing_mode = 0) BEGIN
-                    READ_LONG (local_effect_offset +0x0E) local_duration
-                    PATCH_IF(local_duration>6) BEGIN
-                    PATCH_IF(local_duration + change_value>6) BEGIN
-                        WRITE_LONG (local_effect_offset +0x0E) (local_duration + change_value)
-                    END ELSE BEGIN
-                        WRITE_LONG (local_effect_offset +0x0E) 6
-                    END
-                    END
-                END
-                READ_SHORT local_effect_offset local_opcode
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_SIZE~ AND local_opcode = 12) BEGIN
-                    READ_LONG (local_effect_offset +0x20) local_dice_size                 
-                    PATCH_IF(local_dice_size + change_value>0) BEGIN
-                    WRITE_LONG (local_effect_offset +0x20) (local_dice_size + change_value)
-                    END ELSE BEGIN
-                    WRITE_LONG (local_effect_offset +0x20) 1
-                    END                  
-                END
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_NUMBER~ AND local_opcode = 12) BEGIN
-                    READ_LONG (local_effect_offset +0x1C) local_dice_number                 
-                    PATCH_IF(local_dice_number + change_value>0) BEGIN
-                    WRITE_LONG (local_effect_offset +0x1C) (local_dice_number + change_value)
-                    END ELSE BEGIN
-                    WRITE_LONG (local_effect_offset +0x1C) 1
-                    END                  
-                END
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~AMOUNT~ AND local_opcode = 12) BEGIN
-                    READ_LONG (local_effect_offset +0x04) local_dice_number                 
-                    PATCH_IF(local_dice_number + change_value>0 - 1) BEGIN
-                    WRITE_LONG (local_effect_offset +0x04) (local_dice_number + change_value)
-                    END ELSE BEGIN
-                    WRITE_LONG (local_effect_offset +0x04) 0
-                    END                  
-                END
-                READ_BYTE (local_effect_offset + 0x24) local_save_type
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~SAVING_THROW~ AND local_save_type != 0) BEGIN
-                    READ_SLONG (local_effect_offset +0x28) local_save_bonus                 
-                    PATCH_IF(local_save_bonus + change_value>0 - 10) BEGIN
-                    WRITE_LONG (local_effect_offset +0x28) (local_save_bonus + change_value)
-                    END ELSE BEGIN
-                    WRITE_LONG (local_effect_offset +0x28) (0 - 10)
-                    END                  
-                END
-
-            END
-            END
-            PATCH_IF(i>LOWER_STEPS+1) BEGIN 
+                PATCH_IF(i<LOWER_STEPS+1) BEGIN
+                
                 FOR(i = 0; i < number_effects; ++i) BEGIN
-                SET local_effect_offset = effect_offset + i*0x30
-                READ_BYTE (local_effect_offset + 0x0C) local_timing_mode
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DURATION~ AND local_timing_mode = 0) BEGIN
-                    READ_LONG (local_effect_offset +0x0E) local_duration
-                    PATCH_IF(local_duration>6) BEGIN
-                    PATCH_IF(local_duration + change_value>6) BEGIN
-                        WRITE_LONG (local_effect_offset +0x0E) (local_duration + change_value)
-                    END ELSE BEGIN
-                        WRITE_LONG (local_effect_offset +0x0E) 6
+                    SET local_effect_offset = effect_offset + (i+number_global_effect)*0x30
+                    READ_BYTE (local_effect_offset + 0x0C) local_timing_mode
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DURATION~ AND local_timing_mode = 0) BEGIN
+                        READ_LONG (local_effect_offset +0x0E) local_duration
+                        PATCH_IF(local_duration>6) BEGIN
+                        PATCH_IF(local_duration + change_value>6) BEGIN
+                            WRITE_LONG (local_effect_offset +0x0E) (local_duration + change_value)
+                        END ELSE BEGIN
+                            WRITE_LONG (local_effect_offset +0x0E) 6
+                        END
+                        END
                     END
+                    READ_SHORT local_effect_offset local_opcode
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_SIZE~ AND local_opcode = 12) BEGIN
+                        READ_LONG (local_effect_offset +0x20) local_dice_size                 
+                        PATCH_IF(local_dice_size + change_value>0) BEGIN
+                        WRITE_LONG (local_effect_offset +0x20) (local_dice_size + change_value)
+                        END ELSE BEGIN
+                        WRITE_LONG (local_effect_offset +0x20) 1
+                        END                  
                     END
-                END
-                READ_SHORT local_effect_offset local_opcode
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_SIZE~ AND local_opcode = 12) BEGIN
-                    READ_LONG (local_effect_offset +0x20) local_dice_size                 
-                    PATCH_IF(local_dice_size + change_value>0) BEGIN
-                    WRITE_LONG (local_effect_offset +0x20) (local_dice_size + change_value)
-                    END ELSE BEGIN
-                    WRITE_LONG (local_effect_offset +0x20) 1
-                    END                  
-                END
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_NUMBER~ AND local_opcode = 12) BEGIN
-                    READ_LONG (local_effect_offset +0x1C) local_dice_number                 
-                    PATCH_IF(local_dice_number + change_value>0) BEGIN
-                    WRITE_LONG (local_effect_offset +0x1C) (local_dice_number + change_value)
-                    END ELSE BEGIN
-                    WRITE_LONG (local_effect_offset +0x1C) 1
-                    END                  
-                END
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~AMOUNT~ AND local_opcode = 12) BEGIN
-                    READ_LONG (local_effect_offset +0x04) local_dice_number                 
-                    PATCH_IF(local_dice_number + change_value>0 - 1) BEGIN
-                    WRITE_LONG (local_effect_offset +0x04) (local_dice_number + change_value)
-                    END ELSE BEGIN
-                    WRITE_LONG (local_effect_offset +0x04) 0
-                    END                  
-                END
-                READ_BYTE (local_effect_offset + 0x24) local_save_type
-                PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~SAVING_THROW~ AND local_save_type != 0) BEGIN
-                    READ_SLONG (local_effect_offset +0x28) local_save_bonus                 
-                    PATCH_IF(local_save_bonus + change_value>0 - 10) BEGIN
-                    WRITE_LONG (local_effect_offset +0x28) (local_save_bonus + change_value)
-                    END ELSE BEGIN
-                    WRITE_LONG (local_effect_offset +0x28) (0 - 10)
-                    END                  
-                END
-            END
-            END 
-        END
-    END
-    READ_BYTE 0x72 type
-    READ_BYTE 0x74 location
-    READ_BYTE 0x7e target
-    READ_BYTE 0x7f target_number
-    READ_SHORT 0x80 range 
-    READ_SHORT 0x84 casting_speed
-    READ_ASCII 0x76 icon
-    READ_LONG 0x50 string_reference
-    PATCH_IF (DESCRIPTION STRING_MATCHES_REGEXP "^\+.*") BEGIN 
-        GET_STRREF string_reference current_description
-        SET string_length = STRING_LENGTH "%DESCRIPTION%"
-        LPF SUBSTRING INT_VAR start = 1 length = string_length - 1 STR_VAR string = EVAL "%DESCRIPTION%" RET DESCRIPTION = substring END
-        SPRINT current_description "%current_description%" ^ "%DESCRIPTION%"
-        SAY 0x50 "%current_description%"
-    END ELSE BEGIN 
-        SAY 0x50 "%DESCRIPTION%"
-    END
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_NUMBER~ AND local_opcode = 12) BEGIN
+                        READ_LONG (local_effect_offset +0x1C) local_dice_number                 
+                        PATCH_IF(local_dice_number + change_value>0) BEGIN
+                        WRITE_LONG (local_effect_offset +0x1C) (local_dice_number + change_value)
+                        END ELSE BEGIN
+                        WRITE_LONG (local_effect_offset +0x1C) 1
+                        END                  
+                    END
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~AMOUNT~ AND local_opcode = 12) BEGIN
+                        READ_LONG (local_effect_offset +0x04) local_dice_number                 
+                        PATCH_IF(local_dice_number + change_value>0 - 1) BEGIN
+                        WRITE_LONG (local_effect_offset +0x04) (local_dice_number + change_value)
+                        END ELSE BEGIN
+                        WRITE_LONG (local_effect_offset +0x04) 0
+                        END                  
+                    END
+                    READ_BYTE (local_effect_offset + 0x24) local_save_type
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~SAVING_THROW~ AND local_save_type != 0) BEGIN
+                        READ_SLONG (local_effect_offset +0x28) local_save_bonus                 
+                        PATCH_IF(local_save_bonus + change_value>0 - 10) BEGIN
+                        WRITE_LONG (local_effect_offset +0x28) (local_save_bonus + change_value)
+                        END ELSE BEGIN
+                        WRITE_LONG (local_effect_offset +0x28) (0 - 10)
+                        END                  
+                    END
 
-    LPF DELETE_SPELL_HEADER INT_VAR header_type = (0 - 1) END
-    LPF ADD_SPELL_HEADER
-        INT_VAR
-        type = type
-        location = location
-        target = target
-        target_number = target_number
-        range = range
-        minimum_level = 1
-        casting_speed = casting_speed
-        projectile = 1      
-        STR_VAR 
-        icon = EVAL ~%icon%~
+                END
+                END
+                PATCH_IF(i>LOWER_STEPS+1) BEGIN 
+                    FOR(i = 0; i < number_effects; ++i) BEGIN
+                    SET local_effect_offset = effect_offset + i*0x30
+                    READ_BYTE (local_effect_offset + 0x0C) local_timing_mode
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DURATION~ AND local_timing_mode = 0) BEGIN
+                        READ_LONG (local_effect_offset +0x0E) local_duration
+                        PATCH_IF(local_duration>6) BEGIN
+                        PATCH_IF(local_duration + change_value>6) BEGIN
+                            WRITE_LONG (local_effect_offset +0x0E) (local_duration + change_value)
+                        END ELSE BEGIN
+                            WRITE_LONG (local_effect_offset +0x0E) 6
+                        END
+                        END
+                    END
+                    READ_SHORT local_effect_offset local_opcode
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_SIZE~ AND local_opcode = 12) BEGIN
+                        READ_LONG (local_effect_offset +0x20) local_dice_size                 
+                        PATCH_IF(local_dice_size + change_value>0) BEGIN
+                        WRITE_LONG (local_effect_offset +0x20) (local_dice_size + change_value)
+                        END ELSE BEGIN
+                        WRITE_LONG (local_effect_offset +0x20) 1
+                        END                  
+                    END
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~DICE_NUMBER~ AND local_opcode = 12) BEGIN
+                        READ_LONG (local_effect_offset +0x1C) local_dice_number                 
+                        PATCH_IF(local_dice_number + change_value>0) BEGIN
+                        WRITE_LONG (local_effect_offset +0x1C) (local_dice_number + change_value)
+                        END ELSE BEGIN
+                        WRITE_LONG (local_effect_offset +0x1C) 1
+                        END                  
+                    END
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~AMOUNT~ AND local_opcode = 12) BEGIN
+                        READ_LONG (local_effect_offset +0x04) local_dice_number                 
+                        PATCH_IF(local_dice_number + change_value>0 - 1) BEGIN
+                        WRITE_LONG (local_effect_offset +0x04) (local_dice_number + change_value)
+                        END ELSE BEGIN
+                        WRITE_LONG (local_effect_offset +0x04) 0
+                        END                  
+                    END
+                    READ_BYTE (local_effect_offset + 0x24) local_save_type
+                    PATCH_IF(~%PARAMETER_TO_SCALE%~ STRING_EQUAL ~SAVING_THROW~ AND local_save_type != 0) BEGIN
+                        READ_SLONG (local_effect_offset +0x28) local_save_bonus                 
+                        PATCH_IF(local_save_bonus + change_value>0 - 10) BEGIN
+                        WRITE_LONG (local_effect_offset +0x28) (local_save_bonus + change_value)
+                        END ELSE BEGIN
+                        WRITE_LONG (local_effect_offset +0x28) (0 - 10)
+                        END                  
+                    END
+                END
+                END 
+            END
         END
-    FOR (j = STAT_LOWER_LIMIT; j < STAT_UPPER_LIMIT + 1; ++j) BEGIN
-        SPRINT correct_spell ""
-        PATCH_IF(j<PIVOT_VALUE) BEGIN
-        SET number_of_steps_below_pivot = (PIVOT_VALUE - j)/STEP_SIZE
-        SET correct_spell_rank = LOWER_STEPS + 1 - number_of_steps_below_pivot
-        SPRINT correct_char $extra_char("%correct_spell_rank%")
-        SPRINT correct_spell "%NEW_RESOURCE_BASE%"^"%correct_char%"
+
+        READ_BYTE 0x72 type
+        READ_BYTE 0x74 location
+        READ_BYTE 0x7e target
+        READ_BYTE 0x7f target_number
+        READ_SHORT 0x80 range 
+        READ_SHORT 0x84 casting_speed
+        READ_SHORT 0x98 projectile
+
+        READ_ASCII 0x76 icon
+        READ_LONG 0x50 string_reference
+        PATCH_IF (DESCRIPTION STRING_MATCHES_REGEXP "^\+.*") BEGIN 
+            GET_STRREF string_reference current_description
+            SET string_length = STRING_LENGTH "%DESCRIPTION%"
+            LPF SUBSTRING INT_VAR start = 1 length = string_length - 1 STR_VAR string = EVAL "%DESCRIPTION%" RET DESCRIPTION = substring END
+            SPRINT current_description "%current_description%" ^ "%DESCRIPTION%"
+            SAY 0x50 "%current_description%"
+        END ELSE BEGIN 
+            SAY 0x50 "%DESCRIPTION%"
         END
-        PATCH_IF(j=PIVOT_VALUE) BEGIN
-        SET correct_spell_rank = LOWER_STEPS + 1
-        SPRINT correct_char $extra_char("%correct_spell_rank%")
-        SPRINT correct_spell "%NEW_RESOURCE_BASE%"^"%correct_char%"
+        LPF DELETE_SPELL_HEADER INT_VAR header_type = (0 - 1) END
+        LPF ADD_SPELL_HEADER
+            INT_VAR
+            type = type
+            location = location
+            target = target
+            target_number = target_number
+            range = range
+            minimum_level = 1
+            casting_speed = casting_speed
+            projectile = 1      
+            STR_VAR 
+            icon = EVAL ~%icon%~
+            END
+        FOR (j = STAT_LOWER_LIMIT; j < STAT_UPPER_LIMIT + 1; ++j) BEGIN
+            SPRINT correct_spell ""
+            PATCH_IF(j<PIVOT_VALUE) BEGIN
+            SET number_of_steps_below_pivot = (PIVOT_VALUE - j)/STEP_SIZE
+            SET correct_spell_rank = LOWER_STEPS + 1 - number_of_steps_below_pivot
+            SPRINT correct_char $extra_char("%correct_spell_rank%")
+            SPRINT correct_spell "%NEW_RESOURCE_BASE%"^"%correct_char%"
+            END
+            PATCH_IF(j=PIVOT_VALUE) BEGIN
+            SET correct_spell_rank = LOWER_STEPS + 1
+            SPRINT correct_char $extra_char("%correct_spell_rank%")
+            SPRINT correct_spell "%NEW_RESOURCE_BASE%"^"%correct_char%"
+            END
+            PATCH_IF(j>PIVOT_VALUE) BEGIN
+            SET number_of_steps_above_pivot = (j - PIVOT_VALUE)/STEP_SIZE
+            SET correct_spell_rank = LOWER_STEPS + 1 + number_of_steps_above_pivot
+            SPRINT correct_char $extra_char("%correct_spell_rank%")
+            SPRINT correct_spell "%NEW_RESOURCE_BASE%"^"%correct_char%"
+            END
+            
+            LPF ADD_SPELL_EFFECT
+            INT_VAR
+            opcode = 326
+            target = TARGET 
+            parameter2 = stat_index 
+            parameter1 = j 
+            header = 0
+            STR_VAR
+            resource = EVAL ~%correct_spell%~ END
         END
-        PATCH_IF(j>PIVOT_VALUE) BEGIN
-        SET number_of_steps_above_pivot = (j - PIVOT_VALUE)/STEP_SIZE
-        SET correct_spell_rank = LOWER_STEPS + 1 + number_of_steps_above_pivot
-        SPRINT correct_char $extra_char("%correct_spell_rank%")
-        SPRINT correct_spell "%NEW_RESOURCE_BASE%"^"%correct_char%"
-        END
-        
-        LPF ADD_SPELL_EFFECT
-        INT_VAR
-        opcode = 326
-        target = TARGET 
-        parameter2 = stat_index 
-        parameter1 = j 
-        header = 0
-        STR_VAR
-        resource = EVAL ~%correct_spell%~ END
-    END
+        COPY_EXISTING ~%ORIGINAL_RESOURCE%.SPL~ override 
+            LPF DELETE_SPELL_HEADER INT_VAR header_type = (0 - 1) END
+            LPF ADD_SPELL_HEADER
+                INT_VAR
+                type = type
+                location = location
+                target = target
+                target_number = target_number
+                range = range
+                minimum_level = 1
+                casting_speed = casting_speed
+                projectile = projectile      
+                STR_VAR 
+                icon = EVAL ~%icon%~
+                END
+            LPF ADD_SPELL_EFFECT
+                INT_VAR
+                opcode = 146
+                target = 2 
+                parameter2 = 1
+                header = 0
+                STR_VAR
+                resource = EVAL ~%NEW_RESOURCE_BASE%&~ END  
 
     
     END
